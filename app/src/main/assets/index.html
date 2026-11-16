@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LocalSphere — Hyper-Local Service Directory</title>
+<meta name="description" content="Find trusted local service providers in your area with AI assistance." />
+<meta name="theme-color" content="#16a34a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="LocalSphere" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: {
+            50:  '#f0fdf4',
+            100: '#dcfce7',
+            200: '#bbf7d0',
+            300: '#86efac',
+            400: '#4ade80',
+            500: '#22c55e',
+            600: '#16a34a',
+            700: '#15803d',
+            800: '#166534',
+            900: '#14532d',
+          }
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          display: ['"Space Grotesk"', 'Inter', 'sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f7fdf9;
+    --ink: #0b2a17;
+    --ink-soft: #3f5c4a;
+    --line: #e4f2e9;
+    --accent: #16a34a;
+    --accent-2: #22c55e;
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+  body { overflow-x: hidden; }
+  .font-display { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.02em; }
+
+  #globe-mount {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  #globe-mount canvas { pointer-events: auto; }
+
+  .glass {
+    background: rgba(255,255,255,0.72);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(22,163,74,0.12);
+  }
+  .glass-dark {
+    background: rgba(11,42,23,0.78);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(134,239,172,0.18);
+    color: #ecfdf5;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(22,163,74,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(22,163,74,0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    background-position: -1px -1px;
+  }
+
+  .hero-glow {
+    background:
+      radial-gradient(60% 50% at 50% 40%, rgba(34,197,94,0.18), transparent 70%),
+      radial-gradient(40% 30% at 80% 20%, rgba(134,239,172,0.22), transparent 70%);
+  }
+
+  .btn-primary {
+    background: linear-gradient(180deg, #22c55e, #16a34a);
+    color: white;
+    box-shadow: 0 10px 24px -10px rgba(22,163,74,0.55), inset 0 1px 0 rgba(255,255,255,0.35);
+    transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+  }
+  .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-ghost {
+    background: white; color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .btn-ghost:hover { border-color: #16a34a; color: #16a34a; }
+
+  .field {
+    width: 100%;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .field:focus { border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,0.12); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    background: #ecfdf5; color: #166534;
+    border: 1px solid #bbf7d0; font-size: 12px; font-weight: 500;
+  }
+
+  .card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .card:hover { transform: translateY(-3px); border-color: #86efac; box-shadow: 0 20px 40px -20px rgba(22,163,74,0.25); }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-up { animation: fadeUp .5s ease both; }
+  @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.45); } 70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+  .pulse-ring { animation: pulseRing 2s infinite; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #bbf7d0; border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: #86efac; }
+
+  .modal-backdrop { background: rgba(11,42,23,0.55); backdrop-filter: blur(6px); }
+
+  .ai-bubble {
+    background: linear-gradient(180deg, #ffffff, #f0fdf4);
+    border: 1px solid #bbf7d0;
+    border-radius: 16px;
+  }
+  .ai-bubble.user { background: #16a34a; color: white; border-color: #16a34a; }
+
+  .badge-provider {
+    background: #0b2a17; color: #86efac;
+    border: 1px solid rgba(134,239,172,0.3);
+  }
+  .badge-seeker {
+    background: #ecfdf5; color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+
+  .tab {
+    padding: 10px 16px; border-radius: 10px; font-weight: 500; font-size: 14px;
+    color: #3f5c4a; cursor: pointer; transition: all .15s;
+  }
+  .tab.active { background: #16a34a; color: white; box-shadow: 0 6px 14px -6px rgba(22,163,74,0.5); }
+
+  .toast {
+    position: fixed; top: 20px; right: 20px; z-index: 100;
+    background: white; border: 1px solid var(--line);
+    padding: 14px 18px; border-radius: 12px;
+    box-shadow: 0 20px 40px -15px rgba(11,42,23,0.25);
+    animation: fadeUp .3s ease;
+  }
+  .toast.success { border-left: 4px solid #16a34a; }
+  .toast.error { border-left: 4px solid #dc2626; }
+  .toast.info { border-left: 4px solid #0ea5e9; }
+
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+const CONFIG = {
+  DAHL_API_URL: "https://api.dahl.ai/v1/chat/completions",
+  DAHL_API_KEY: "dahl_52Km8P7jK2uRhadZZ5uWvzPE3esUQXm3J",
+  DAHL_MODEL: "dahl-chat",
+  PRIVACY_URL: "/privacy.html",
+  TERMS_URL:  "/terms.html",
+  SUPPORT_EMAIL: "support@localsphere.app",
+};
+
+const store = {
+  get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
+  del: (k) => localStorage.removeItem(k),
+};
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const genOTP = () => String(Math.floor(100000 + Math.random() * 900000));
+
+const ToastCtx = React.createContext(null);
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const push = useCallback((msg, type = "info", ms = 3500) => {
+    const id = uid();
+    setToasts(t => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), ms);
+  }, []);
+  return (
+    <ToastCtx.Provider value={push}>
+      {children}
+      <div className="fixed top-4 right-4 z-[100] space-y-2">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast ${t.type}`}>
+            <div className="text-sm font-medium">{t.msg}</div>
+          </div>
+        ))}
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+const useToast = () => React.useContext(ToastCtx);
+
+const AuthCtx = React.createContext(null);
+function AuthProvider({ children }) {
+  const toast = useToast();
+  const [session, setSession] = useState(() => store.get("ls_session", null));
+  const [users, setUsers] = useState(() => store.get("ls_users", []));
+
+  useEffect(() => store.set("ls_session", session), [session]);
+  useEffect(() => store.set("ls_users", users), [users]);
+
+  const signup = async ({ name, email, phone, password, role }) => {
+    if (users.find(u => u.email === email)) {
+      toast("An account with that email already exists.", "error");
+      return { ok: false, reason: "exists" };
+    }
+    const code = genOTP();
+    console.log(`[LocalSphere] Verification code for ${email}: ${code}`);
+    const pending = { name, email, phone, password, role, code, createdAt: Date.now() };
+    store.set("ls_pending_verify", pending);
+    toast(`Verification code sent to ${email}. (Demo: check browser console for code.)`, "info", 6000);
+    return { ok: true, pending };
+  };
+
+  const verify = (code) => {
+    const pending = store.get("ls_pending_verify", null);
+    if (!pending) return { ok: false, reason: "no_pending" };
+    if (pending.code !== code.trim()) return { ok: false, reason: "bad_code" };
+    const user = {
+      id: uid(),
+      name: pending.name,
+      email: pending.email,
+      phone: pending.phone || "",
+      password: pending.password,
+      role: pending.role,
+      verified: true,
+      createdAt: Date.now(),
+    };
+    setUsers(u => [...u, user]);
+    store.del("ls_pending_verify");
+    setSession({ userId: user.id, role: user.role });
+    toast("Email verified. Welcome to LocalSphere!", "success");
+    return { ok: true, user };
+  };
+
+  const login = ({ email, password }) => {
+    const user = users.find(u => u.email === email);
+    if (!user) return { ok: false, reason: "not_found" };
+    if (!user.verified) return { ok: false, reason: "unverified" };
+    if (user.password !== password) return { ok: false, reason: "bad_password" };
+    setSession({ userId: user.id, role: user.role });
+    toast(`Signed in as ${user.name}`, "success");
+    return { ok: true, user };
+  };
+
+  const logout = () => {
+    setSession(null);
+    toast("Signed out.", "info");
+  };
+
+  const currentUser = session ? users.find(u => u.id === session.userId) : null;
+
+  return (
+    <AuthCtx.Provider value={{ session, currentUser, users, signup, verify, login, logout, setUsers }}>
+      {children}
+    </AuthCtx.Provider>
+  );
+}
+const useAuth = () => React.useContext(AuthCtx);
+
+const ServicesCtx = React.createContext(null);
+function ServicesProvider({ children }) {
+  const [listings, setListings] = useState(() => store.get("ls_listings", []));
+  useEffect(() => store.set("ls_listings", listings), [listings]);
+  return (
+    <ServicesCtx.Provider value={{ listings, setListings }}>
+      {children}
+    </ServicesCtx.Provider>
+  );
+}
+const useServices = () => React.useContext(ServicesCtx);
+
+function useEarthTexture() {
+  return useMemo(() => {
+    const W = 2048, H = 1024;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+
+    const ocean = ctx.createLinearGradient(0, 0, 0, H);
+    ocean.addColorStop(0, "#0b3a6b");
+    ocean.addColorStop(0.5, "#0e5aa8");
+    ocean.addColorStop(1, "#0b3a6b");
+    ctx.fillStyle = ocean;
+    ctx.fillRect(0, 0, W, H);
+
+    for (let i = 0; i < 6000; i++) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.04})`;
+      ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
+    }
+
+    const land = (polys, color = "#2f7a3a") => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      polys.forEach(([lon, lat], i) => {
+        const x = ((lon + 180) / 360) * W;
+        const y = ((90 - lat) / 180) * H;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    const green1 = "#2f7a3a";
+    const green2 = "#3c8f48";
+    const sand   = "#8a7a3a";
+    const ice    = "#e9f4ef";
+
+    land([[-168,66],[-140,70],[-95,72],[-75,62],[-55,50],[-65,45],[-80,25],[-98,18],[-105,22],[-117,32],[-125,48],[-140,58],[-160,60]], green1);
+    land([[-92,18],[-86,16],[-82,10],[-78,8],[-80,14],[-88,18]], green2);
+    land([[-80,12],[-60,12],[-50,0],[-35,-5],[-40,-22],[-55,-34],[-68,-55],[-74,-45],[-72,-18],[-78,-2],[-80,6]], green1);
+    land([[-17,15],[-10,25],[10,32],[25,32],[35,30],[42,12],[50,2],[42,-12],[35,-25],[22,-35],[18,-34],[12,-18],[8,-5],[-5,5],[-15,10]], green2);
+    land([[-10,25],[10,32],[25,32],[35,30],[30,20],[10,18],[-5,18]], sand);
+    land([[-10,38],[-8,48],[2,58],[12,62],[28,70],[40,65],[45,55],[30,45],[25,38],[10,38],[0,40]], green1);
+    land([[40,65],[60,72],[100,75],[140,72],[170,65],[175,55],[150,45],[130,35],[120,22],[105,15],[95,10],[80,8],[70,22],[60,25],[50,30],[45,40],[40,55]], green1);
+    land([[68,30],[78,32],[88,28],[90,22],[80,8],[72,12]], green2);
+    land([[95,6],[105,2],[115,-2],[120,-6],[110,-8],[100,-4]], green2);
+    land([[114,-14],[130,-12],[145,-15],[152,-25],[148,-38],[132,-35],[118,-34],[114,-22]], sand);
+    land([[-55,60],[-30,62],[-20,72],[-30,82],[-55,80],[-60,70]], ice);
+    land([[-180,-70],[-120,-72],[-60,-70],[0,-72],[60,-70],[120,-72],[180,-70],[180,-90],[-180,-90]], ice);
+    land([[-180,85],[-120,88],[-60,86],[0,88],[60,86],[120,88],[180,85],[180,90],[-180,90]], ice);
+
+    const img = ctx.getImageData(0,0,W,H);
+    for (let y = 0; y < H; y++) {
+      const lat = 90 - (y / H) * 180;
+      const shade = Math.cos((lat * Math.PI)/180) * 0.18;
+      for (let x = 0; x < W; x++) {
+        const i = (y*W + x)*4;
+        if (img.data[i+1] > 100 && img.data[i+2] < 150) {
+          img.data[i]   = Math.min(255, img.data[i]   + shade*60);
+          img.data[i+1] = Math.min(255, img.data[i+1] + shade*60);
+          img.data[i+2] = Math.min(255, img.data[i+2] + shade*40);
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.anisotropy = 8;
+    return tex;
+  }, []);
+}
+
+function Globe({ className = "" }) {
+  const mountRef = useRef(null);
+  const earthTex = useEarthTexture();
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const W = mount.clientWidth, H = mount.clientHeight;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, W/H, 0.1, 100);
+    camera.position.set(0, 0, 3.2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W, H);
+    mount.appendChild(renderer.domElement);
+
+    const earthGeo = new THREE.SphereGeometry(1, 128, 128);
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthTex,
+      shininess: 12,
+      specular: new THREE.Color(0x223322),
+    });
+    const earth = new THREE.Mesh(earthGeo, earthMat);
+    scene.add(earth);
+
+    const atmosGeo = new THREE.SphereGeometry(1.04, 128, 128);
+    const atmosMat = new THREE.ShaderMaterial({
+      transparent: true,
+      side: THREE.BackSide,
+      uniforms: { c: { value: 0.6 }, power: { value: 3.5 } },
+      vertexShader: `
+        varying vec3 vNormal;
+        void main(){
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }`,
+      fragmentShader: `
+        varying vec3 vNormal;
+        uniform float c;
+        uniform float power;
+        void main(){
+          float intensity = pow(c - dot(vNormal, vec3(0.0,0.0,1.0)), power);
+          gl_FragColor = vec4(0.45, 0.95, 0.55, 1.0) * intensity;
+        }`,
+    });
+    const atmos = new THREE.Mesh(atmosGeo, atmosMat);
+    scene.add(atmos);
+
+    const key = new THREE.DirectionalLight(0xffffff, 1.1);
+    key.position.set(5, 3, 5);
+    scene.add(key);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 1200;
+    const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 20 + Math.random() * 20;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      positions[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+      positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i*3+2] = r * Math.cos(phi);
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.05 }));
+    scene.add(stars);
+
+    let targetRotY = 0, targetRotX = 0;
+    let dragging = false, lastX = 0, lastY = 0;
+    const onDown = (e) => { dragging = true; const p = e.touches ? e.touches[0] : e; lastX = p.clientX; lastY = p.clientY; };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const p = e.touches ? e.touches[0] : e;
+      targetRotY += (p.clientX - lastX) * 0.005;
+      targetRotX += (p.clientY - lastY) * 0.005;
+      targetRotX = Math.max(-0.8, Math.min(0.8, targetRotX));
+      lastX = p.clientX; lastY = p.clientY;
+    };
+    const onUp = () => dragging = false;
+    renderer.domElement.addEventListener('mousedown', onDown);
+    renderer.domElement.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    renderer.domElement.addEventListener('touchstart', onDown, { passive: true });
+    renderer.domElement.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend', onUp);
+
+    let raf;
+    const tick = () => {
+      if (!dragging) targetRotY += 0.0015;
+      earth.rotation.y += (targetRotY - earth.rotation.y) * 0.08;
+      earth.rotation.x += (targetRotX - earth.rotation.x) * 0.08;
+      atmos.rotation.y = earth.rotation.y;
+      atmos.rotation.x = earth.rotation.x;
+      stars.rotation.y += 0.0003;
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+
+    const onResize = () => {
+      const w = mount.clientWidth, h = mount.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w/h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchend', onUp);
+      renderer.domElement.removeEventListener('mousedown', onDown);
+      renderer.domElement.removeEventListener('mousemove', onMove);
+      renderer.domElement.removeEventListener('touchstart', onDown);
+      renderer.domElement.removeEventListener('touchmove', onMove);
+      mount.removeChild(renderer.domElement);
+      renderer.dispose();
+      earthGeo.dispose(); earthMat.dispose();
+      atmosGeo.dispose(); atmosMat.dispose();
+      starGeo.dispose();
+    };
+  }, [earthTex]);
+
+  return <div ref={mountRef} className={className} />;
+}
+
+async function callDahl(messages) {
+  try {
+    const res = await fetch(CONFIG.DAHL_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${CONFIG.DAHL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: CONFIG.DAHL_MODEL,
+        messages: [
+          { role: "system", content:
+            "You are Sphere, LocalSphere's on-site AI concierge. " +
+            "Help users discover local services, navigate the directory, " +
+            "and (for providers) manage their listings. Be concise, friendly, " +
+            "and action-oriented. Never invent listings — refer to what's on the site." },
+          ...messages,
+        ],
+        temperature: 0.6,
+      }),
+    });
+    if (!res.ok) throw new Error("Dahl API error " + res.status);
+    const 
